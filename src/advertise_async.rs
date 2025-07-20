@@ -1,3 +1,4 @@
+use crate::config;
 use libmdns::{Responder, Service};
 use tokio::signal;
 
@@ -39,4 +40,24 @@ pub async fn start_mdns_service(
     }
 
     log::info!("mDNS service shutting down...");
+}
+
+pub async fn start_mdns_service_with_metadata(peer_id: &str, peer_name: &str, instance_name: &str) {
+    let txt_strings = [
+        format!("{}={}", config::TXT_KEY_PEER_ID, peer_id),
+        format!("{}={}", config::TXT_KEY_PEER_NAME, peer_name),
+        format!("{}={}", config::TXT_KEY_INSTANCE, instance_name),
+        format!("{}={}", config::TXT_KEY_PLATFORM, whoami::platform()),
+        format!("{}={}", config::TXT_KEY_VERSION, env!("CARGO_PKG_VERSION")),
+    ];
+
+    let txt_records: Vec<&str> = txt_strings.iter().map(|s| s.as_str()).collect();
+
+    start_mdns_service(
+        config::SERVICE_TYPE,
+        instance_name,
+        config::SERVICE_PORT,
+        &txt_records,
+    )
+    .await;
 }
