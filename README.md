@@ -21,9 +21,20 @@
 | **`uuid`**              | Used to generate unique peer IDs (e.g., `Uuid::new_v4()`), which can help identify devices in the chat room and prevent message self-looping.                                                                          |
 | **`whoami`**            | Gets system-level user info like username, hostname, etc. Useful for showing a default nickname or peer identity in the chat UI.                                                                                       |
 
+### Peers on the same LAN should be able to:
+
+📢 Broadcast their presence over mDNS.
+🔍 Discover other peers on the LAN using mDNS.
+🔌 Establish WebSocket connections to discovered peers.
+💬 Exchange messages in real time.
+
 ### Next steps
 
 - [ ] Implement mDNS advertisement
 - [ ] Launch the WebSocket server
 - [ ] Connect to discovered peers
 - [ ] Enable full chat message loop with JSON encoding
+
+### References
+
+- https://medium.com/@potto_94870/understand-mdns-with-an-example-1e05ef70013b
