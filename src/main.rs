@@ -1,15 +1,31 @@
 mod advertise_async;
+mod config;
 mod discovery;
+mod logger;
 mod peer;
+mod utils;
 
 use peer::PeerMap;
 use std::sync::Arc;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    let peer_id = uuid::Uuid::new_v4().to_string();
-    let peer_name = whoami::username();
-    println!("🚀 Starting LAN Chat as {peer_name} ({peer_id})");
+    // Initialize logger once
+    logger::init_logger();
+
+    let peer_id = utils::generate_peer_id();
+    let peer_name = utils::generate_peer_name();
+    let instance_name = utils::generate_instance_name(&peer_name, &peer_id);
+
+    log::info!(
+        "\n\
+        🚀 Starting LAN Chat\n\
+        ├─ ID      : {peer_id}\n\
+        ├─ Name    : {peer_name}\n\
+        ├─ Instance: {instance_name}\n\
+        └─ Port    : {}",
+        config::SERVICE_PORT
+    );
 
     let peers: PeerMap = Arc::new(tokio::sync::RwLock::new(Default::default()));
 
@@ -17,10 +33,10 @@ async fn main() -> anyhow::Result<()> {
         let peer_id = peer_id.clone(); // Clone peer_id here so the move block owns it
         async move {
             advertise_async::start_mdns_service(
-                "_lan-chat._tcp", // Custom service type (must match discovery)
-                "RustChat",       // Instance name (e.g., hostname-like)
-                8080,             // Port number
-                &["peer_id", &peer_id],
+                config::SERVICE_TYPE, // Custom service type (must match discovery)
+                &instance_name,       // Instance name (e.g., hostname-like)
+                config::SERVICE_PORT, // Port number
+                &[config::TXT_KEY_PEER_ID, &peer_id], // TXT records with peer ID
             )
             .await
         }

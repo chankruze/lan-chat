@@ -1031,6 +1031,7 @@ dependencies = [
  "env_logger",
  "futures",
  "futures-util",
+ "hostname",
  "libmdns",
  "log",
  "mdns",
