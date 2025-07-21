@@ -5,13 +5,18 @@ use mdns::{RecordKind, Response};
 use std::collections::{HashMap, HashSet};
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
+use tokio::sync::mpsc::UnboundedSender;
 
 /// Starts mDNS discovery and updates the shared peer map asynchronously.
 ///
 /// # Arguments
 /// * `our_id` - The local peer's unique ID
 /// * `peers` - Shared peer map (protected by Arc<RwLock<_>>)
-pub async fn discover(our_id: String, peers: PeerMap) -> anyhow::Result<()> {
+pub async fn discover(
+    our_id: String,
+    peers: PeerMap,
+    advertise_tx: UnboundedSender<()>,
+) -> anyhow::Result<()> {
     let stream = mdns::discover::all("_lan-chat._tcp.local", Duration::from_secs(15))?.listen();
     tokio::pin!(stream);
 
@@ -21,6 +26,7 @@ pub async fn discover(our_id: String, peers: PeerMap) -> anyhow::Result<()> {
         if let Some((peer_id, addr)) = extract_peer_info(&response, &our_id) {
             if seen.insert(peer_id.clone()) {
                 peers.write().await.insert(peer_id, addr);
+                let _ = advertise_tx.send(());
             }
         }
     }

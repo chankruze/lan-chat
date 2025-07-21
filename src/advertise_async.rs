@@ -1,76 +1,71 @@
-use crate::config;
+use crate::{config, utils};
 use libmdns::{Responder, Service};
-use std::time::Duration;
-use tokio::{select, signal, time::interval};
+use tokio::sync::mpsc::UnboundedReceiver;
 
-/// Starts an mDNS advertisement for a given service type, instance name, port, and optional TXT records.
+/// Starts an mDNS advertisement for a LAN chat peer with support for re-advertising.
+///
+/// This function launches an mDNS service using the given peer details and registers it
+/// under a predefined service type. It supports re-advertising the service when triggered
+/// via the `advertise_rx` channel (e.g., due to peer discovery refresh).
+///
+/// The service continues to run until a CTRL+C shutdown signal is received.
 ///
 /// # Arguments
 ///
-/// * `service_type` - The service type (e.g., `_http._tcp`)
-/// * `instance_name` - The human-readable name for the service instance
-/// * `port` - The port on which the service is running
-/// * `txt_records` - Optional TXT records describing the service
+/// * `peer_id` - Unique identifier for the peer (used in TXT records)
+/// * `peer_name` - Human-readable name for the peer (used in TXT records)
+/// * `instance_name` - mDNS instance name to register (e.g., "alice@laptop")
+/// * `advertise_rx` - A channel receiver to trigger re-advertising the service
+///
+/// # Behavior
+///
+/// - Registers an mDNS service with the configured service type and port.
+/// - Adds metadata via TXT records such as peer ID, name, platform, and version.
+/// - Listens for re-advertise signals and re-registers the service on demand.
+/// - Gracefully shuts down on CTRL+C signal.
 ///
 /// # Example
 /// ```rust
-/// advertise::start_mdns_service("_http._tcp", "My Rust Service", 8080, &["path=/"]).await;
+/// let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
+/// advertise::start_mdns_service_with_re_advertise("1234", "Alice", "alice@mac", rx).await;
+/// // You can call `tx.send(())` to trigger re-advertisement.
 /// ```
-pub async fn start_mdns_service(
-    service_type: &str,
+pub async fn start_mdns_service_with_re_advertise(
+    peer_id: &str,
+    peer_name: &str,
     instance_name: &str,
-    port: u16,
-    txt_records: &[&str],
+    mut advertise_rx: UnboundedReceiver<()>,
 ) {
+    let txt_strings = utils::build_txt_records(peer_id, peer_name, instance_name);
+    let txt_records: Vec<&str> = txt_strings.iter().map(|s| s.as_str()).collect();
+
     let responder = Responder::new().expect("❌ Failed to create mDNS responder");
 
-    log::info!(
-        "📡 Starting mDNS advertisement loop for '{instance_name}' on service '{service_type}' at port {port}"
-    );
-    log::info!("Press Ctrl+C to stop...");
+    log::info!("📡 Starting mDNS service advertiser with re-advertise support...");
 
-    let mut interval = interval(Duration::from_secs(60));
-    let shutdown = signal::ctrl_c();
-    tokio::pin!(shutdown); // 🔧 pin it to be used inside `select!`
+    let shutdown = tokio::signal::ctrl_c();
+    tokio::pin!(shutdown);
 
     loop {
+        // (Re)register the service
         let _svc: Service = responder.register(
-            service_type.to_string(),
+            config::SERVICE_TYPE.to_string(),
             instance_name.to_string(),
-            port,
-            txt_records,
+            config::SERVICE_PORT,
+            &txt_records,
         );
 
-        log::info!("✅ (Re)advertised mDNS service '{instance_name}'");
+        log::info!("🔁 mDNS service (re)advertised");
 
-        select! {
-            _ = interval.tick() => {
-                continue; // re-register on next tick
-            }
+        tokio::select! {
+            _ = advertise_rx.recv() => {
+                log::info!("🔔 Re-advertise triggered by peer discovery");
+                continue; // re-register
+            },
             _ = &mut shutdown => {
-                log::info!("🛑 Received Ctrl+C, shutting down mDNS service...");
+                log::info!("🛑 Shutting down mDNS service...");
                 break;
             }
         }
     }
-}
-
-pub async fn start_mdns_service_with_metadata(peer_id: &str, peer_name: &str, instance_name: &str) {
-    let txt_strings = [
-        format!("{}={}", config::TXT_KEY_PEER_ID, peer_id),
-        format!("{}={}", config::TXT_KEY_PEER_NAME, peer_name),
-        format!("{}={}", config::TXT_KEY_INSTANCE, instance_name),
-        format!("{}={}", config::TXT_KEY_PLATFORM, whoami::platform()),
-        format!("{}={}", config::TXT_KEY_VERSION, env!("CARGO_PKG_VERSION")),
-    ];
-
-    let txt_records: Vec<&str> = txt_strings.iter().map(|s| s.as_str()).collect();
-
-    start_mdns_service(
-        config::SERVICE_TYPE,
-        instance_name,
-        config::SERVICE_PORT,
-        &txt_records,
-    )
-    .await;
 }
