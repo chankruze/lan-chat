@@ -1,9 +1,10 @@
-mod advertise_async;
 mod config;
-mod discovery;
-mod logger;
+mod networking;
 mod peer;
 mod utils;
+
+use networking::{discover, start_mdns_service_with_re_advertise};
+use utils::logger;
 
 use peer::PeerMap;
 use std::sync::Arc;
@@ -35,13 +36,8 @@ async fn main() -> anyhow::Result<()> {
         let peer_id = peer_id.clone();
 
         async move {
-            advertise_async::start_mdns_service_with_re_advertise(
-                &peer_id,
-                &peer_name,
-                &instance_name,
-                advertise_rx,
-            )
-            .await
+            start_mdns_service_with_re_advertise(&peer_id, &peer_name, &instance_name, advertise_rx)
+                .await
         }
     });
 
@@ -49,7 +45,7 @@ async fn main() -> anyhow::Result<()> {
         let peer_id = peer_id.clone();
         let peers = peers.clone();
         async move {
-            if let Err(e) = discovery::discover(peer_id, peers, advertise_tx).await {
+            if let Err(e) = discover(peer_id, peers, advertise_tx).await {
                 eprintln!("❌ Discovery error: {e:?}");
             }
         }
