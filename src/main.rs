@@ -29,11 +29,19 @@ async fn main() -> anyhow::Result<()> {
 
     let peers: PeerMap = Arc::new(tokio::sync::RwLock::new(Default::default()));
 
+    let (advertise_tx, advertise_rx) = tokio::sync::mpsc::unbounded_channel();
+
     let advertise_task = tokio::spawn({
         let peer_id = peer_id.clone();
+
         async move {
-            advertise_async::start_mdns_service_with_metadata(&peer_id, &peer_name, &instance_name)
-                .await
+            advertise_async::start_mdns_service_with_re_advertise(
+                &peer_id,
+                &peer_name,
+                &instance_name,
+                advertise_rx,
+            )
+            .await
         }
     });
 
@@ -41,7 +49,7 @@ async fn main() -> anyhow::Result<()> {
         let peer_id = peer_id.clone();
         let peers = peers.clone();
         async move {
-            if let Err(e) = discovery::discover(peer_id, peers).await {
+            if let Err(e) = discovery::discover(peer_id, peers, advertise_tx).await {
                 eprintln!("❌ Discovery error: {e:?}");
             }
         }

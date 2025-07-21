@@ -1,5 +1,7 @@
+use crate::config;
 use hostname::get as get_hostname;
 use std::collections::HashMap;
+use std::vec::Vec;
 
 pub fn generate_peer_id() -> String {
     uuid::Uuid::new_v4().to_string()
@@ -30,4 +32,15 @@ pub fn parse_txt_record(txt: &[String]) -> HashMap<String, String> {
             }
         })
         .collect()
+}
+
+/// Builds mDNS TXT records as a list of `&str` from given metadata.
+pub fn build_txt_records(peer_id: &str, peer_name: &str, instance_name: &str) -> Vec<String> {
+    vec![
+        format!("{}={}", config::TXT_KEY_PEER_ID, peer_id),
+        format!("{}={}", config::TXT_KEY_PEER_NAME, peer_name),
+        format!("{}={}", config::TXT_KEY_INSTANCE, instance_name),
+        format!("{}={}", config::TXT_KEY_PLATFORM, whoami::platform()),
+        format!("{}={}", config::TXT_KEY_VERSION, env!("CARGO_PKG_VERSION")),
+    ]
 }
