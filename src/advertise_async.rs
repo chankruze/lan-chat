@@ -1,6 +1,11 @@
 use crate::config;
 use libmdns::{Responder, Service};
+use once_cell::sync::Lazy;
 use tokio::signal;
+use tokio::sync::Mutex;
+
+static MDNS_RESPONDER: Lazy<Mutex<Responder>> =
+    Lazy::new(|| Mutex::new(Responder::new().expect("Failed to create mDNS responder")));
 
 /// Starts an mDNS advertisement for a given service type, instance name, port, and optional TXT records.
 ///
@@ -21,7 +26,8 @@ pub async fn start_mdns_service(
     port: u16,
     txt_records: &[&str],
 ) {
-    let responder = Responder::new().expect("❌ Failed to create mDNS responder");
+    // let responder = Responder::new().expect("❌ Failed to create mDNS responder");
+    let responder = MDNS_RESPONDER.lock().await;
 
     // Keep the service handle alive
     let _svc: Service = responder.register(

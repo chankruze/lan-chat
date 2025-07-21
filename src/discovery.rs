@@ -1,5 +1,6 @@
 use crate::peer::PeerMap;
 use crate::utils::parse_txt_record;
+use crate::{advertise_async, utils};
 use futures_util::stream::StreamExt;
 use mdns::{RecordKind, Response};
 use std::collections::{HashMap, HashSet};
@@ -16,11 +17,21 @@ pub async fn discover(our_id: String, peers: PeerMap) -> anyhow::Result<()> {
     tokio::pin!(stream);
 
     let mut seen = HashSet::new();
+    let peer_id = utils::generate_peer_id();
+    let peer_name = utils::generate_peer_name();
+    let instance_name = utils::generate_instance_name(&peer_name, &peer_id);
 
     while let Some(Ok(response)) = stream.next().await {
         if let Some((peer_id, addr)) = extract_peer_info(&response, &our_id) {
             if seen.insert(peer_id.clone()) {
                 peers.write().await.insert(peer_id, addr);
+                // Re-advertise our own peer info
+                advertise_async::start_mdns_service_with_metadata(
+                    &our_id,
+                    &peer_name,
+                    &instance_name,
+                )
+                .await;
             }
         }
     }
