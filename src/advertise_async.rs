@@ -1,6 +1,7 @@
 use crate::config;
 use libmdns::{Responder, Service};
-use tokio::signal;
+use std::time::Duration;
+use tokio::{select, signal, time::interval};
 
 /// Starts an mDNS advertisement for a given service type, instance name, port, and optional TXT records.
 ///
@@ -23,23 +24,35 @@ pub async fn start_mdns_service(
 ) {
     let responder = Responder::new().expect("❌ Failed to create mDNS responder");
 
-    // Keep the service handle alive
-    let _svc: Service = responder.register(
-        service_type.to_string(),
-        instance_name.to_string(),
-        port,
-        txt_records,
+    log::info!(
+        "📡 Starting mDNS advertisement loop for '{instance_name}' on service '{service_type}' at port {port}"
     );
-
-    log::info!("Advertising mDNS service '{instance_name}' as '{service_type}' on port {port}");
     log::info!("Press Ctrl+C to stop...");
 
-    // Wait for termination signal
-    if let Err(e) = signal::ctrl_c().await {
-        eprintln!("❌ Failed to listen for shutdown signal: {e}");
-    }
+    let mut interval = interval(Duration::from_secs(60));
+    let shutdown = signal::ctrl_c();
+    tokio::pin!(shutdown); // 🔧 pin it to be used inside `select!`
 
-    log::info!("mDNS service shutting down...");
+    loop {
+        let _svc: Service = responder.register(
+            service_type.to_string(),
+            instance_name.to_string(),
+            port,
+            txt_records,
+        );
+
+        log::info!("✅ (Re)advertised mDNS service '{instance_name}'");
+
+        select! {
+            _ = interval.tick() => {
+                continue; // re-register on next tick
+            }
+            _ = &mut shutdown => {
+                log::info!("🛑 Received Ctrl+C, shutting down mDNS service...");
+                break;
+            }
+        }
+    }
 }
 
 pub async fn start_mdns_service_with_metadata(peer_id: &str, peer_name: &str, instance_name: &str) {
