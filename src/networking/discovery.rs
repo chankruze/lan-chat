@@ -69,12 +69,12 @@ fn extract_peer_info(resp: &Response, our_id: &str) -> Option<PeerInfo> {
 
     Some(PeerInfo {
         id: peer_id,
-        metadata: PeerMetadata {
+        metadata: Some(PeerMetadata {
             addr,
             name: peer_name,
             instance,
             platform,
             version,
-        },
+        }),
     })
 }

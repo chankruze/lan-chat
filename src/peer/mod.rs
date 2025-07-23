@@ -1,4 +1,5 @@
 pub mod conversion;
+pub mod events;
 pub mod info;
 pub mod manager;
 pub mod map;

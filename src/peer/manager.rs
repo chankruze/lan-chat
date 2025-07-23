@@ -10,28 +10,22 @@ pub async fn handle_new_peer(
 ) -> anyhow::Result<bool> {
     let mut peers_map = peers.write().await;
 
-    // Looks up the current peer in the peers_map by its id.
-    // Returns Some(existing_peer_info) if found, or None if it's a new peer.
-    match peers_map.get(&peer_info.id) {
-        // If the peer already exists and the metadata is not different
-        // 1. Log that there's nothing to update.
-        // 2. Return false to indicate no update was performed.
-        Some(existing_peer_info)
-            if !peer_info
-                .metadata
-                .is_different(&existing_peer_info.metadata) =>
-        {
-            log::debug!("Nothing to update for peer {}", peer_info.id);
-            return Ok(false);
-        }
-        // If the peer already exists but the metadata is different or the peer is new
-        // It logs the new or updated peer using PeerInfo::log() for structured debug output.
-        // Then inserts the peer info into the map.
-        _ => {
-            peer_info.log();
-            peers_map.insert(peer_info.id.clone(), peer_info.clone());
-        }
+    let should_update = match peers_map.get(&peer_info.id) {
+        Some(existing_peer_info) => match (&peer_info.metadata, &existing_peer_info.metadata) {
+            (Some(new), Some(old)) => new.is_different(old),
+            (None, None) => false,
+            _ => true,
+        },
+        None => true, // New peer, definitely update
+    };
+
+    if !should_update {
+        log::debug!("Nothing to update for peer {}", peer_info.id);
+        return Ok(false);
     }
+
+    peer_info.log();
+    peers_map.insert(peer_info.id.clone(), peer_info.clone());
 
     // Drop the lock before notifying
     drop(peers_map);

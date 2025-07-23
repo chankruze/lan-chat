@@ -12,7 +12,7 @@ use super::{PeerInfo, PeerMetadata};
 // This is helpful when we want to store or serialize peers as key-value pairs (e.g., in a HashMap<String, PeerMetadata>).
 impl From<PeerInfo> for (String, PeerMetadata) {
     fn from(info: PeerInfo) -> Self {
-        (info.id, info.metadata)
+        (info.id, info.metadata.expect("metadata should exist here"))
     }
 }
 
@@ -28,7 +28,7 @@ impl From<(&str, &PeerMetadata)> for PeerInfo {
     fn from((id, meta): (&str, &PeerMetadata)) -> Self {
         PeerInfo {
             id: id.to_string(),
-            metadata: meta.clone(),
+            metadata: Some(meta.clone()),
         }
     }
 }

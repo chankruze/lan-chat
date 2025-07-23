@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::net::SocketAddr;
 
-#[derive(Debug, Clone, PartialEq, Eq)]
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct PeerMetadata {
     pub addr: SocketAddr,
     pub name: String,
