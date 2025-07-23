@@ -23,6 +23,14 @@ impl PeerInfo {
         }
     }
 
+    pub fn is_metadata_different_from(&self, other: &Self) -> bool {
+        match (&self.metadata, &other.metadata) {
+            (Some(a), Some(b)) => a.is_different(b),
+            (None, None) => false,
+            _ => true,
+        }
+    }
+
     pub fn log(&self) {
         log::debug!("\n{self:#?}");
     }

@@ -11,12 +11,8 @@ pub async fn handle_new_peer(
     let mut peers_map = peers.write().await;
 
     let should_update = match peers_map.get(&peer_info.id) {
-        Some(existing_peer_info) => match (&peer_info.metadata, &existing_peer_info.metadata) {
-            (Some(new), Some(old)) => new.is_different(old),
-            (None, None) => false,
-            _ => true,
-        },
-        None => true, // New peer, definitely update
+        Some(existing_peer_info) => peer_info.is_metadata_different_from(existing_peer_info),
+        None => true,
     };
 
     if !should_update {
