@@ -1,8 +1,8 @@
-use crate::peer::PeerMap;
+use crate::peer::{PeerMap, handle_new_peer};
 use crate::utils::parse_txt_record;
 use futures_util::stream::StreamExt;
 use mdns::{RecordKind, Response};
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
 use tokio::sync::mpsc::UnboundedSender;
@@ -20,14 +20,9 @@ pub async fn discover(
     let stream = mdns::discover::all("_lan-chat._tcp.local", Duration::from_secs(15))?.listen();
     tokio::pin!(stream);
 
-    let mut seen = HashSet::new();
-
     while let Some(Ok(response)) = stream.next().await {
         if let Some((peer_id, addr)) = extract_peer_info(&response, &our_id) {
-            if seen.insert(peer_id.clone()) {
-                peers.write().await.insert(peer_id, addr);
-                let _ = advertise_tx.send(());
-            }
+            let _ = handle_new_peer(peer_id, addr, peers.clone(), &advertise_tx).await?;
         }
     }
 
@@ -43,7 +38,7 @@ fn extract_peer_info(resp: &Response, our_id: &str) -> Option<(String, SocketAdd
         }
     })?;
 
-    let peer_id = txt_map.get("peer_id")?;
+    let peer_id = txt_map.get("peer_id")?.clone();
 
     if peer_id == our_id {
         log::debug!("Ignoring own ID: {our_id}");
@@ -71,7 +66,7 @@ fn extract_peer_info(resp: &Response, our_id: &str) -> Option<(String, SocketAdd
 
     let addr = SocketAddr::new(ip, port);
 
-    log::info!(
+    log::debug!(
         "\n\
     🔍 Discovered Peer\n\
      ├─ Name     : {peer_name}\n\
@@ -82,5 +77,5 @@ fn extract_peer_info(resp: &Response, our_id: &str) -> Option<(String, SocketAdd
      └─ Addr     : {ip}:{port}"
     );
 
-    Some((peer_name, addr))
+    Some((peer_id, addr))
 }
