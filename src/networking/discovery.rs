@@ -1,4 +1,5 @@
-use crate::peer::{PeerMap, handle_new_peer};
+use crate::peer::metadata::PeerMetadata;
+use crate::peer::{PeerInfo, PeerMap, handle_new_peer};
 use crate::utils::parse_txt_record;
 use futures_util::stream::StreamExt;
 use mdns::{RecordKind, Response};
@@ -21,15 +22,15 @@ pub async fn discover(
     tokio::pin!(stream);
 
     while let Some(Ok(response)) = stream.next().await {
-        if let Some((peer_id, addr)) = extract_peer_info(&response, &our_id) {
-            let _ = handle_new_peer(peer_id, addr, peers.clone(), &advertise_tx).await?;
+        if let Some(peer_info) = extract_peer_info(&response, &our_id) {
+            let _ = handle_new_peer(peer_info, peers.clone(), &advertise_tx).await?;
         }
     }
 
     Ok(())
 }
 
-fn extract_peer_info(resp: &Response, our_id: &str) -> Option<(String, SocketAddr)> {
+fn extract_peer_info(resp: &Response, our_id: &str) -> Option<PeerInfo> {
     let txt_map: HashMap<String, String> = resp.records().find_map(|r| {
         if let RecordKind::TXT(txt) = &r.kind {
             Some(parse_txt_record(txt))
@@ -66,16 +67,14 @@ fn extract_peer_info(resp: &Response, our_id: &str) -> Option<(String, SocketAdd
 
     let addr = SocketAddr::new(ip, port);
 
-    log::debug!(
-        "\n\
-    🔍 Discovered Peer\n\
-     ├─ Name     : {peer_name}\n\
-     ├─ ID       : {peer_id}\n\
-     ├─ Instance : {instance}\n\
-     ├─ Platform : {platform}\n\
-     ├─ Version  : {version}\n\
-     └─ Addr     : {ip}:{port}"
-    );
-
-    Some((peer_id, addr))
+    Some(PeerInfo {
+        id: peer_id,
+        metadata: PeerMetadata {
+            addr,
+            name: peer_name,
+            instance,
+            platform,
+            version,
+        },
+    })
 }
