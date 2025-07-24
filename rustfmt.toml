@@ -1,0 +1,9 @@
+# Indentation settings
+hard_tabs = false      # Use spaces instead of tabs
+tab_spaces = 2         # Number of spaces per indent
+
+# Maximum width of each line
+max_width = 100
+
+# Replace deprecated setting
+fn_params_layout = "Tall"  # Replaces `fn_args_layout`

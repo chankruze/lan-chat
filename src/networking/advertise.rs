@@ -31,41 +31,41 @@ use tokio::sync::mpsc::UnboundedReceiver;
 /// // You can call `tx.send(())` to trigger re-advertisement.
 /// ```
 pub async fn start_mdns_service_with_re_advertise(
-    peer_id: &str,
-    peer_name: &str,
-    instance_name: &str,
-    mut advertise_rx: UnboundedReceiver<()>,
+  peer_id: &str,
+  peer_name: &str,
+  instance_name: &str,
+  mut advertise_rx: UnboundedReceiver<()>,
 ) {
-    let txt_strings = utils::build_txt_records(peer_id, peer_name, instance_name);
-    let txt_records: Vec<&str> = txt_strings.iter().map(|s| s.as_str()).collect();
+  let txt_strings = utils::build_txt_records(peer_id, peer_name, instance_name);
+  let txt_records: Vec<&str> = txt_strings.iter().map(|s| s.as_str()).collect();
 
-    let responder = Responder::new().expect("❌ Failed to create mDNS responder");
+  let responder = Responder::new().expect("❌ Failed to create mDNS responder");
 
-    log::info!("📡 Starting mDNS service advertiser with re-advertise support...");
+  log::info!("📡 Starting mDNS service advertiser with re-advertise support...");
 
-    let shutdown = tokio::signal::ctrl_c();
-    tokio::pin!(shutdown);
+  let shutdown = tokio::signal::ctrl_c();
+  tokio::pin!(shutdown);
 
-    loop {
-        // (Re)register the service
-        let _svc: Service = responder.register(
-            config::SERVICE_TYPE.to_string(),
-            instance_name.to_string(),
-            config::SERVICE_PORT,
-            &txt_records,
-        );
+  loop {
+    // (Re)register the service
+    let _svc: Service = responder.register(
+      config::SERVICE_TYPE.to_string(),
+      instance_name.to_string(),
+      config::SERVICE_PORT,
+      &txt_records,
+    );
 
-        log::info!("🔁 mDNS service (re)advertised");
+    log::info!("🔁 mDNS service (re)advertised");
 
-        tokio::select! {
-            _ = advertise_rx.recv() => {
-                log::info!("🔔 Re-advertise triggered by peer discovery");
-                continue; // re-register
-            },
-            _ = &mut shutdown => {
-                log::info!("🛑 Shutting down mDNS service...");
-                break;
-            }
+    tokio::select! {
+        _ = advertise_rx.recv() => {
+            log::info!("🔔 Re-advertise triggered by peer discovery");
+            continue; // re-register
+        },
+        _ = &mut shutdown => {
+            log::info!("🛑 Shutting down mDNS service...");
+            break;
         }
     }
+  }
 }
