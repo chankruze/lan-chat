@@ -1,12 +1,11 @@
 use crate::peer::metadata::PeerMetadata;
-use crate::peer::{PeerInfo, PeerMap, handle_new_peer};
+use crate::peer::{PeerInfo, PeerMap, PeerNotifier, handle_new_peer};
 use crate::utils::parse_txt_record;
 use futures_util::stream::StreamExt;
 use mdns::{RecordKind, Response};
 use std::collections::HashMap;
 use std::net::{IpAddr, SocketAddr};
 use std::time::Duration;
-use tokio::sync::mpsc::UnboundedSender;
 
 /// Starts mDNS discovery and updates the shared peer map asynchronously.
 ///
@@ -16,14 +15,14 @@ use tokio::sync::mpsc::UnboundedSender;
 pub async fn discover(
   our_id: String,
   peers: PeerMap,
-  advertise_tx: UnboundedSender<()>,
+  notifier: PeerNotifier,
 ) -> anyhow::Result<()> {
   let stream = mdns::discover::all("_lan-chat._tcp.local", Duration::from_secs(15))?.listen();
   tokio::pin!(stream);
 
   while let Some(Ok(response)) = stream.next().await {
     if let Some(peer_info) = extract_peer_info(&response, &our_id) {
-      let _ = handle_new_peer(peer_info, peers.clone(), &advertise_tx).await?;
+      let _ = handle_new_peer(peer_info, peers.clone(), &notifier, "discovery").await?;
     }
   }
 
