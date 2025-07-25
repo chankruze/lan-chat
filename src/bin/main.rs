@@ -1,12 +1,9 @@
-mod config;
-mod networking;
-mod peer;
-mod utils;
-
-use networking::{discover, start_mdns_service_with_re_advertise};
-use utils::logger;
-
-use peer::{PeerEvent, PeerMap, PeerNotifier};
+use lan_chat::{
+  config,
+  networking::{discover, start_mdns_service_with_re_advertise},
+  peer::{PeerEvent, PeerMap, PeerNotifier},
+  utils::{self, logger},
+};
 use std::sync::Arc;
 
 #[tokio::main]
