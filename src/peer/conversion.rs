@@ -11,9 +11,9 @@ use super::{PeerInfo, PeerMetadata};
 //
 // This is helpful when we want to store or serialize peers as key-value pairs (e.g., in a HashMap<String, PeerMetadata>).
 impl From<PeerInfo> for (String, PeerMetadata) {
-    fn from(info: PeerInfo) -> Self {
-        (info.id, info.metadata)
-    }
+  fn from(info: PeerInfo) -> Self {
+    (info.id, info.metadata.expect("metadata should exist here"))
+  }
 }
 
 // This allows us to create a PeerInfo from a borrowed ID (&str) and metadata reference (&PeerMetadata).
@@ -25,10 +25,10 @@ impl From<PeerInfo> for (String, PeerMetadata) {
 //
 // This is useful when reading from a map (HashMap<String, PeerMetadata>) and we want to recreate a PeerInfo from its entry without moving values.
 impl From<(&str, &PeerMetadata)> for PeerInfo {
-    fn from((id, meta): (&str, &PeerMetadata)) -> Self {
-        PeerInfo {
-            id: id.to_string(),
-            metadata: meta.clone(),
-        }
+  fn from((id, meta): (&str, &PeerMetadata)) -> Self {
+    PeerInfo {
+      id: id.to_string(),
+      metadata: Some(meta.clone()),
     }
+  }
 }
