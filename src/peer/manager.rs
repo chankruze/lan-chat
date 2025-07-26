@@ -16,7 +16,6 @@ pub async fn handle_new_peer(
           peer_info.clone(),
         ))
       } else {
-        log::debug!("Nothing to update for peer {}", peer_info.id);
         return Ok(false);
       }
     }
@@ -27,7 +26,9 @@ pub async fn handle_new_peer(
   peers_map.insert(peer_info.id.clone(), peer_info.clone());
   drop(peers_map);
 
-  notifier.notify_advertise();
+  if matches!(event, Some(PeerEvent::Joined { .. })) {
+    notifier.notify_advertise();
+  }
 
   if let Some(event) = event {
     notifier.emit_event(event);
