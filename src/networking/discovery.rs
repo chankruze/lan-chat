@@ -41,7 +41,6 @@ fn extract_peer_info(resp: &Response, our_id: &str) -> Option<PeerInfo> {
   let peer_id = txt_map.get("peer_id")?.clone();
 
   if peer_id == our_id {
-    log::debug!("Ignoring own ID: {our_id}");
     return None;
   }
 
