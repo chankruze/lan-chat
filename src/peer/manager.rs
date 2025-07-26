@@ -27,7 +27,7 @@ pub async fn handle_new_peer(
   drop(peers_map);
 
   if matches!(event, Some(PeerEvent::Joined { .. })) {
-    notifier.notify_advertise();
+    notifier.advertise();
   }
 
   if let Some(event) = event {

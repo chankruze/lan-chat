@@ -1,6 +1,7 @@
-use crate::{config, utils};
+use crate::{config, peer::PeerIdentity, utils};
 use libmdns::{Responder, Service};
-use tokio::sync::mpsc::UnboundedReceiver;
+use std::sync::Arc;
+use tokio::sync::{RwLock, mpsc::UnboundedReceiver};
 
 /// Starts an mDNS advertisement for a LAN chat peer with support for re-advertising.
 ///
@@ -27,18 +28,16 @@ use tokio::sync::mpsc::UnboundedReceiver;
 /// # Example
 /// ```rust
 /// let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-/// advertise::start_mdns_service_with_re_advertise("1234", "Alice", "alice@mac", rx).await;
+/// let identity = PeerIdentity::load_or_generate();
+/// start_mdns_service_with_re_advertise(&identity, rx).await;
+/// // The service will run until a CTRL+C signal is received.
+/// // To trigger re-advertisement, you can send a message on the `tx`
 /// // You can call `tx.send(())` to trigger re-advertisement.
 /// ```
 pub async fn start_mdns_service_with_re_advertise(
-  peer_id: &str,
-  peer_name: &str,
-  instance_name: &str,
+  identity: Arc<RwLock<PeerIdentity>>,
   mut advertise_rx: UnboundedReceiver<()>,
 ) {
-  let txt_strings = utils::build_txt_records(peer_id, peer_name, instance_name);
-  let txt_records: Vec<&str> = txt_strings.iter().map(|s| s.as_str()).collect();
-
   let responder = Responder::new().expect("❌ Failed to create mDNS responder");
 
   log::info!("📡 Starting mDNS service advertiser with re-advertise support...");
@@ -47,10 +46,43 @@ pub async fn start_mdns_service_with_re_advertise(
   tokio::pin!(shutdown);
 
   loop {
+    // let (peer_id, peer_name, instance_name) = {
+    //   let identity = identity.read().await;
+    //   (
+    //     identity.peer_id.clone(),
+    //     identity.peer_name.clone(),
+    //     identity.instance_name.clone(),
+    //   )
+    // };
+
+    // or
+
+    let identity = identity.read().await;
+    let peer_id = identity.peer_id.clone();
+    let peer_name = identity.peer_name.clone();
+    let instance_name = identity.instance_name.clone();
+    drop(identity); // 🔓 Explicitly release lock
+
+    log::info!(
+      "\n\
+    🚀 Starting LAN Chat\n\
+    ├─ ID      : {}\n\
+    ├─ Name    : {}\n\
+    ├─ Instance: {}\n\
+    └─ Port    : {}",
+      &peer_id,
+      &peer_name,
+      &instance_name,
+      config::SERVICE_PORT
+    );
+
+    let txt_strings = utils::build_txt_records(&peer_id, &peer_name, &instance_name);
+    let txt_records: Vec<&str> = txt_strings.iter().map(|s| s.as_str()).collect();
+
     // (Re)register the service
     let _svc: Service = responder.register(
       config::SERVICE_TYPE.to_string(),
-      instance_name.to_string(),
+      instance_name,
       config::SERVICE_PORT,
       &txt_records,
     );
@@ -59,8 +91,7 @@ pub async fn start_mdns_service_with_re_advertise(
 
     tokio::select! {
         _ = advertise_rx.recv() => {
-            log::info!("🔔 Re-advertise triggered by peer discovery");
-            continue; // re-register
+            continue;
         },
         _ = &mut shutdown => {
             log::info!("🛑 Shutting down mDNS service...");
