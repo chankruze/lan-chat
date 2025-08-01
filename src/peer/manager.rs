@@ -4,7 +4,7 @@ use std::{
   sync::Arc,
   time::{Duration, Instant},
 };
-use tokio::sync::{RwLock, mpsc};
+use tokio::sync::{RwLock, mpsc::Sender};
 
 #[derive(Debug, Clone)]
 pub struct ManagedPeer {
@@ -38,15 +38,15 @@ impl ManagedPeer {
 pub struct PeerManager {
   active_peers: Arc<RwLock<HashMap<String, ManagedPeer>>>,
   known_peers: Arc<RwLock<HashSet<String>>>,
-  event_tx: mpsc::Sender<PeerEvent>,
+  peer_event_tx: Sender<PeerEvent>,
 }
 
 impl PeerManager {
-  pub fn new(event_tx: mpsc::Sender<PeerEvent>) -> Self {
+  pub fn new(peer_event_tx: Sender<PeerEvent>) -> Self {
     Self {
       active_peers: Arc::new(RwLock::new(HashMap::new())),
       known_peers: Arc::new(RwLock::new(HashSet::new())),
-      event_tx,
+      peer_event_tx,
     }
   }
 
@@ -64,12 +64,12 @@ impl PeerManager {
 
         if !was_connected {
           let _ = self
-            .event_tx
+            .peer_event_tx
             .send(PeerEvent::new_reconnected(source, peer_info.clone()))
             .await;
         } else if metadata_changed {
           let _ = self
-            .event_tx
+            .peer_event_tx
             .send(PeerEvent::new_updated(
               source,
               peer_info.clone(),
@@ -81,7 +81,7 @@ impl PeerManager {
       None => {
         active_peers.insert(peer_id.clone(), ManagedPeer::new(peer_info.clone()));
         let _ = self
-          .event_tx
+          .peer_event_tx
           .send(PeerEvent::new_joined(source, peer_info))
           .await;
       }
@@ -93,7 +93,7 @@ impl PeerManager {
     if let Some(peer) = peers.get_mut(peer_id) {
       peer.is_connected = false;
       let _ = self
-        .event_tx
+        .peer_event_tx
         .send(PeerEvent::new_left(source, peer_id.to_string()))
         .await;
     }
@@ -125,7 +125,7 @@ impl PeerManager {
       if peer.info.is_metadata_different_from(&new_info) {
         peer.info = new_info.clone();
         let _ = self
-          .event_tx
+          .peer_event_tx
           .send(PeerEvent::new_updated(source, new_info, "manual_update"))
           .await;
       }

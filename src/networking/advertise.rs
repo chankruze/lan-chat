@@ -1,42 +1,41 @@
 use crate::{config, peer::PeerIdentity, utils};
 use libmdns::{Responder, Service};
 use std::sync::Arc;
-use tokio::sync::{RwLock, mpsc::UnboundedReceiver};
+use tokio::sync::{RwLock, mpsc::Receiver};
 
 /// Starts an mDNS advertisement for a LAN chat peer with support for re-advertising.
 ///
-/// This function launches an mDNS service using the given peer details and registers it
-/// under a predefined service type. It supports re-advertising the service when triggered
-/// via the `advertise_rx` channel (e.g., due to peer discovery refresh).
+/// This async function continuously runs an mDNS service for a peer, using identity data
+/// from shared state. It supports re-advertising via a channel trigger (e.g., on peer updates).
 ///
-/// The service continues to run until a CTRL+C shutdown signal is received.
+/// The service stays active until a CTRL+C shutdown signal is received.
 ///
 /// # Arguments
 ///
-/// * `peer_id` - Unique identifier for the peer (used in TXT records)
-/// * `peer_name` - Human-readable name for the peer (used in TXT records)
-/// * `instance_name` - mDNS instance name to register (e.g., "alice@laptop")
-/// * `advertise_rx` - A channel receiver to trigger re-advertising the service
+/// * `identity` - Shared peer identity wrapped in `Arc<RwLock<PeerIdentity>>`
+/// * `advertise_rx` - A `tokio::mpsc::Receiver<()>` used to trigger re-advertisement
 ///
 /// # Behavior
 ///
-/// - Registers an mDNS service with the configured service type and port.
-/// - Adds metadata via TXT records such as peer ID, name, platform, and version.
-/// - Listens for re-advertise signals and re-registers the service on demand.
-/// - Gracefully shuts down on CTRL+C signal.
+/// - Registers an mDNS service with configured type and port.
+/// - Populates TXT records with peer ID, name, instance name, platform, and version.
+/// - On receiving a message via `advertise_rx`, re-advertises the service.
+/// - Gracefully exits on receiving a CTRL+C signal.
 ///
 /// # Example
+///
 /// ```rust
-/// let (tx, rx) = tokio::sync::mpsc::unbounded_channel();
-/// let identity = PeerIdentity::load_or_generate();
-/// start_mdns_service_with_re_advertise(&identity, rx).await;
-/// // The service will run until a CTRL+C signal is received.
-/// // To trigger re-advertisement, you can send a message on the `tx`
-/// // You can call `tx.send(())` to trigger re-advertisement.
+/// let (tx, rx) = tokio::sync::mpsc::channel(32);
+/// let identity = Arc::new(RwLock::new(PeerIdentity::load_or_generate()));
+///
+/// tokio::spawn(start_mdns_service_with_re_advertise(identity.clone(), rx));
+///
+/// // Trigger a re-advertise later with:
+/// tx.send(()).await.unwrap();
 /// ```
 pub async fn start_mdns_service_with_re_advertise(
   identity: Arc<RwLock<PeerIdentity>>,
-  mut advertise_rx: UnboundedReceiver<()>,
+  mut advertise_rx: Receiver<()>,
 ) {
   let responder = Responder::new().expect("❌ Failed to create mDNS responder");
 
@@ -46,30 +45,22 @@ pub async fn start_mdns_service_with_re_advertise(
   tokio::pin!(shutdown);
 
   loop {
-    // let (peer_id, peer_name, instance_name) = {
-    //   let identity = identity.read().await;
-    //   (
-    //     identity.peer_id.clone(),
-    //     identity.peer_name.clone(),
-    //     identity.instance_name.clone(),
-    //   )
-    // };
-
-    // or
-
-    let identity = identity.read().await;
-    let peer_id = identity.peer_id.clone();
-    let peer_name = identity.peer_name.clone();
-    let instance_name = identity.instance_name.clone();
-    drop(identity); // 🔓 Explicitly release lock
+    let (peer_id, peer_name, instance_name) = {
+      let identity = identity.read().await;
+      (
+        identity.peer_id.clone(),
+        identity.peer_name.clone(),
+        identity.instance_name.clone(),
+      )
+    }; // `identity` goes out of scope here automatically
 
     log::info!(
       "\n\
-    🚀 Starting LAN Chat\n\
-    ├─ ID      : {}\n\
-    ├─ Name    : {}\n\
-    ├─ Instance: {}\n\
-    └─ Port    : {}",
+      🚀 Starting LAN Chat\n\
+      ├─ ID      : {}\n\
+      ├─ Name    : {}\n\
+      ├─ Instance: {}\n\
+      └─ Port    : {}",
       &peer_id,
       &peer_name,
       &instance_name,
@@ -79,7 +70,7 @@ pub async fn start_mdns_service_with_re_advertise(
     let txt_strings = utils::build_txt_records(&peer_id, &peer_name, &instance_name);
     let txt_records: Vec<&str> = txt_strings.iter().map(|s| s.as_str()).collect();
 
-    // (Re)register the service
+    // Register (or re-register) the mDNS service
     let _svc: Service = responder.register(
       config::SERVICE_TYPE.to_string(),
       instance_name,
@@ -91,6 +82,7 @@ pub async fn start_mdns_service_with_re_advertise(
 
     tokio::select! {
         _ = advertise_rx.recv() => {
+            log::debug!("📣 Re-advertise signal received");
             continue;
         },
         _ = &mut shutdown => {
