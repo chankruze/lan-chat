@@ -17,13 +17,20 @@ pub enum PeerEvent {
     timestamp: DateTime<Utc>,
     source: String,
     peer: PeerInfo,
+    reason: String,
   },
-  // Left {
-  //   id: Uuid,
-  //   timestamp: DateTime<Utc>,
-  //   source: String,
-  //   peer: PeerInfo,
-  // },
+  Left {
+    id: Uuid,
+    timestamp: DateTime<Utc>,
+    source: String,
+    peer: PeerInfo,
+  },
+  Reconnected {
+    id: Uuid,
+    timestamp: DateTime<Utc>,
+    source: String,
+    peer: PeerInfo,
+  },
 }
 
 impl PeerEvent {
@@ -36,21 +43,31 @@ impl PeerEvent {
     }
   }
 
-  pub fn new_updated(source: impl Into<String>, peer: PeerInfo) -> Self {
+  pub fn new_updated(source: impl Into<String>, peer: PeerInfo, reason: &str) -> Self {
     Self::Updated {
+      id: Uuid::new_v4(),
+      timestamp: Utc::now(),
+      source: source.into(),
+      peer,
+      reason: reason.to_string(),
+    }
+  }
+
+  pub fn new_left(source: impl Into<String>, id: String) -> Self {
+    Self::Left {
+      id: Uuid::new_v4(),
+      timestamp: Utc::now(),
+      source: source.into(),
+      peer: PeerInfo { id, metadata: None },
+    }
+  }
+
+  pub fn new_reconnected(source: impl Into<String>, peer: PeerInfo) -> Self {
+    Self::Reconnected {
       id: Uuid::new_v4(),
       timestamp: Utc::now(),
       source: source.into(),
       peer,
     }
   }
-
-  // pub fn new_left(source: impl Into<String>, id: String) -> Self {
-  //   Self::Left {
-  //     id: Uuid::new_v4(),
-  //     timestamp: Utc::now(),
-  //     source: source.into(),
-  //     peer: PeerInfo { id, metadata: None },
-  //   }
-  // }
 }

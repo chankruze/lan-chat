@@ -15,7 +15,7 @@ impl PeerNotifier {
     }
   }
 
-  pub fn notify_advertise(&self) {
+  pub fn advertise(&self) {
     let _ = self.advertise_tx.send(());
   }
 
