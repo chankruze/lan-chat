@@ -1,3 +1,4 @@
+use crate::config;
 use crate::peer::PeerInfo;
 use crate::peer::metadata::PeerMetadata;
 use crate::utils::parse_txt_record;
@@ -39,12 +40,14 @@ pub fn extract_peer_info(resp: &Response, our_id: &str) -> Option<PeerInfo> {
     }
   })?;
 
-  let addr = SocketAddr::new(ip, port);
+  let mdns_addr = SocketAddr::new(ip, port);
+  let ws_addr = SocketAddr::new(ip, config::WS_PORT);
 
   Some(PeerInfo {
     id: peer_id,
     metadata: Some(PeerMetadata {
-      addr,
+      mdns_addr,
+      ws_addr,
       name: peer_name,
       instance,
       platform,
