@@ -1,6 +1,6 @@
 use super::event::WsEvent;
 use futures_util::{SinkExt, StreamExt};
-use std::{collections::HashMap, net::SocketAddr, sync::Arc};
+use std::{collections::HashMap, net::SocketAddr, sync::{Arc, atomic::AtomicBool}};
 use tokio::{
   net::TcpStream,
   sync::{RwLock, mpsc::Sender},
@@ -11,6 +11,8 @@ use tokio_tungstenite::{WebSocketStream, connect_async, tungstenite::protocol::M
 pub struct WsManager {
   connections: Arc<RwLock<HashMap<String, tokio::sync::mpsc::UnboundedSender<Message>>>>,
   event_sender: Sender<WsEvent>,
+  server_running: Arc<AtomicBool>,
+  server_address: Arc<RwLock<Option<SocketAddr>>>,
 }
 
 impl WsManager {
@@ -18,7 +20,25 @@ impl WsManager {
     Self {
       connections: Arc::new(RwLock::new(HashMap::new())),
       event_sender,
+      server_running: Arc::new(AtomicBool::new(false)),
+      server_address: Arc::new(RwLock::new(None)),
     }
+  }
+
+  /// Check if the WebSocket server is currently running
+  pub fn is_server_running(&self) -> bool {
+    self.server_running.load(std::sync::atomic::Ordering::Acquire)
+  }
+
+  /// Get the current server address if running
+  pub async fn get_server_address(&self) -> Option<SocketAddr> {
+    *self.server_address.read().await
+  }
+
+  /// Set server running state and address
+  pub async fn set_server_state(&self, running: bool, addr: Option<SocketAddr>) {
+    self.server_running.store(running, std::sync::atomic::Ordering::Release);
+    *self.server_address.write().await = addr;
   }
 
   // Handles an incoming WebSocket connection from the server side
