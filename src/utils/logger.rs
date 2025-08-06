@@ -20,7 +20,7 @@ pub fn init_logger() {
     let mut builder = Builder::new();
 
     builder.filter_module("lan_chat", LevelFilter::Debug);
-    builder.filter_module("libmdns", LevelFilter::Debug);
+    builder.filter_module("libmdns", LevelFilter::Info);
 
     if let Ok(rust_log) = env::var("RUST_LOG") {
       builder.parse_filters(&rust_log);
